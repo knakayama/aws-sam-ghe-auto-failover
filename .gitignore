@@ -1,0 +1,11 @@
+/.sam/
+params/*
+!params/param.sample.json
+src/handlers/failover/*
+!src/handlers/failover/index.py
+!src/handlers/failover/Dockerfile
+!src/handlers/failover/requirements.txt
+src/handlers/check2/*
+!src/handlers/check2/index.py
+!src/handlers/check2/Dockerfile
+!src/handlers/check2/requirements.txt

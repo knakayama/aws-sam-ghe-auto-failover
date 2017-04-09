@@ -1,0 +1,32 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: GHE Auto Failover Security Group Stack
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  GHESecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+
+Resources:
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Ref AWS::StackName
+      VpcId: !Ref VpcId
+      Tags:
+        - Key: Name
+          Value: !Ref AWS::StackName
+
+  GHESecurityGroup:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref GHESecurityGroupId
+      IpProtocol: tcp
+      FromPort: 122
+      ToPort: 122
+      SourceSecurityGroupId: !Ref LambdaSecurityGroup
+
+Outputs:
+  LambdaSecurityGroupId:
+    Value: !Ref LambdaSecurityGroup

@@ -1,0 +1,175 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Description: GHE Auto Failover Main Stack
+
+Parameters:
+  Email:
+    Type: String
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  GHESecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+  GHEHostName:
+    Type: String
+  PrivateKeyBase64Encoded:
+    Type: String
+  LoadBalancerName:
+    Type: String
+  PrimaryInstanceId:
+    Type: String
+  SecondaryInstanceId:
+    Type: String
+
+Resources:
+  SNS:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: src/templates/sns.yml
+      Parameters:
+        Email: !Ref Email
+
+  SecurityGroup:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: src/templates/security-group.yml
+      Parameters:
+        VpcId: !Ref VpcId
+        GHESecurityGroupId: !Ref GHESecurityGroupId
+
+  Check1:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/handlers/check1
+      Handler: index.handler
+      Runtime: python2.7
+      Policies:
+        - Version: 2012-10-17
+          Statement:
+            - Sid: ELBAccess
+              Effect: Allow
+              Action: elasticloadbalancing:*
+              Resource: "*"
+      Environment:
+        Variables:
+          LoadBalancerName: !Ref LoadBalancerName
+          PrimaryInstanceId: !Ref PrimaryInstanceId
+
+  Check2:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/handlers/check2
+      Handler: index.handler
+      Runtime: python2.7
+      Timeout: 300
+      Policies:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      VpcConfig:
+        SecurityGroupIds: [ !GetAtt SecurityGroup.Outputs.LambdaSecurityGroupId ]
+        SubnetIds: !Ref SubnetIds
+      Environment:
+        Variables:
+          GHEHostName: !Ref GHEHostName
+          PrivateKeyBase64Encoded: !Ref PrivateKeyBase64Encoded
+
+  Failover:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/handlers/failover
+      Handler: index.handler
+      Runtime: python2.7
+      Timeout: 300
+      Policies:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      VpcConfig:
+        SecurityGroupIds: [ !GetAtt SecurityGroup.Outputs.LambdaSecurityGroupId ]
+        SubnetIds: !Ref SubnetIds
+      Environment:
+        Variables:
+          GHEHostName: !Ref GHEHostName
+          PrivateKeyBase64Encoded: !Ref PrivateKeyBase64Encoded
+
+  Swap:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/handlers/swap
+      Handler: index.handler
+      Runtime: python2.7
+      Policies:
+        - Version: 2012-10-17
+          Statement:
+            - Sid: ELBAccess
+              Effect: Allow
+              Action: elasticloadbalancing:*
+              Resource: "*"
+      Environment:
+        Variables:
+          LoadBalancerName: !Ref LoadBalancerName
+          PrimaryInstanceId: !Ref PrimaryInstanceId
+          SecondaryInstanceId: !Ref SecondaryInstanceId
+
+  Notification:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/handlers/notification
+      Handler: index.handler
+      Runtime: python2.7
+      Policies:
+        - Version: 2012-10-17
+          Statement:
+            - Sid: SNSAccess
+              Effect: Allow
+              Action: sns:Publish
+              Resource: !GetAtt SNS.Outputs.TopicArn
+      Environment:
+        Variables:
+          TopicArn: !GetAtt SNS.Outputs.TopicArn
+
+  StepFunctions:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: src/templates/step-functions.yml
+      Parameters:
+        Check1Arn: !GetAtt Check1.Arn
+        Check2Arn: !GetAtt Check2.Arn
+        FailoverFuncArn: !GetAtt Failover.Arn
+        SwapArn: !GetAtt Swap.Arn
+        NotificationFuncArn: !GetAtt Notification.Arn
+
+  InvokeStepFunctions:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/handlers/invoke-step-functions
+      Handler: index.handler
+      Runtime: python2.7
+      Policies:
+        - Version: 2012-10-17
+          Statement:
+            - Sid: StepFunctionsAccess
+              Effect: Allow
+              Action: states:StartExecution
+              Resource: !GetAtt StepFunctions.Outputs.StateMachineArn
+      Environment:
+        Variables:
+          StateMachineArn: !GetAtt StepFunctions.Outputs.StateMachineArn
+      Events:
+        Invoker:
+          Type: SNS
+          Properties:
+            Topic: !GetAtt SNS.Outputs.TopicArn
+
+  CloudWatch:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: src/templates/cloudwatch.yml
+      Parameters:
+        LoadBalancerName: !Ref LoadBalancerName
+        TopicArn: !GetAtt SNS.Outputs.TopicArn
+
+Outputs:
+  StateMachineArn:
+    Value: !GetAtt StepFunctions.Outputs.StateMachineArn
+  StateMachineName:
+    Value: !GetAtt StepFunctions.Outputs.StateMachineName

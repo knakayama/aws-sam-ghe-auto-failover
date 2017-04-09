@@ -1,0 +1,27 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: GHE Auto Failover CloudWatch Stack
+
+Parameters:
+  LoadBalancerName:
+    Type: String
+  TopicArn:
+    Type: String
+
+Resources:
+  UnHealthyHostCount:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: GHE Auto Failover
+      MetricName: UnHealthyHostCount
+      Namespace: AWS/ELB
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: LoadBalancerName
+          Value: !Ref LoadBalancerName
+      AlarmActions:
+        - !Ref TopicArn

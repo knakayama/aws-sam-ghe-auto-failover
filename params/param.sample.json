@@ -1,0 +1,13 @@
+{
+  "Parameters": {
+    "Email": "_YOUR_EMAIL_",
+    "GHESecurityGroupId": "_YOUR_GHE_SECURITY_GROUP_ID_",
+    "VpcId": "_YOUR_VPC_ID_",
+    "SubnetIds": "_YOUR_SUBNET_IDS_",
+    "GHEHostName": "_YOUR_GHE_HOST_NAME_",
+    "LoadBalancerName": "_YOUR_LOAD_BALANCER_NAME_",
+    "PrimaryInstanceId": "_YOUR_PRIMARY_INSTANCE_ID_",
+    "SecondaryInstanceId": "_YOUR_SECONDARY_INSTANCE_ID_",
+    "PrivateKeyBase64Encoded": "_YOUR_PRIVATE_KEY_BASE64_ENCODED_"
+  }
+}

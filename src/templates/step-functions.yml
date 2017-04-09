@@ -1,0 +1,96 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: GHE Auto Failover Step Functions Stack
+
+Parameters:
+  Check1Arn:
+    Type: String
+  Check2Arn:
+    Type: String
+  FailoverFuncArn:
+    Type: String
+  SwapArn:
+    Type: String
+  NotificationFuncArn:
+    Type: String
+
+Resources:
+  InvokeLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: StepFunctionsAssumeRolePolicy
+            Effect: Allow
+            Principal:
+              Service: !Sub states.${AWS::Region}.amazonaws.com
+            Action: sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaRole
+
+  StateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      RoleArn: !GetAtt InvokeLambdaRole.Arn
+      DefinitionString: !Sub |-
+        {
+          "StartAt": "Check1",
+          "States": {
+            "Check1": {
+              "Type": "Task",
+              "Resource": "${Check1Arn}",
+              "Next": "Check2"
+            },
+            "Check2": {
+              "Type": "Task",
+              "Resource": "${Check2Arn}",
+              "Next": "ChoiceState"
+            },
+            "ChoiceState": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "And": [
+                    {
+                      "Variable": "$.Result1",
+                      "StringEquals": "OK"
+                    },
+                    {
+                      "Variable": "$.Result2",
+                      "StringEquals": "OK"
+                    }
+                  ],
+                  "Next": "Failover"
+                }
+              ],
+              "Default": "DefaultState"
+            },
+            "Failover": {
+              "Type": "Task",
+              "Resource": "${FailoverFuncArn}",
+              "Next": "Swap"
+            },
+            "Swap": {
+              "Type": "Task",
+              "Resource": "${SwapArn}",
+              "Next": "Notification"
+            },
+            "Notification": {
+              "Type": "Task",
+              "Resource": "${NotificationFuncArn}",
+              "End": true
+            },
+            "DefaultState": {
+              "Type": "Fail",
+              "Cause": "UnExpected State"
+            }
+          }
+        }
+
+Outputs:
+  StateMachineArn:
+    Value: !Ref StateMachine
+  StateMachineName:
+    Value: !GetAtt StateMachine.Name
