@@ -22,6 +22,7 @@ def handler(event, context):
                 os.environ['GHEHostName'],
                 port=122,
                 username='admin',
+                timeout=float(250),
                 key_filename=private_key_file)
         stdin, stdout, stderr = client.exec_command('ghe-repl-status')
     except Exception as e:
