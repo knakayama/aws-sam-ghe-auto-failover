@@ -1,3 +1,4 @@
+DOCKER_PATH = _YOUR_DOCKER_PATH_
 S3_BUCKET = _YOUR_S3_BUCKET_
 STACK_NAME = ghe-auto-failover
 
@@ -34,7 +35,7 @@ execute-changeset:
 			--output text`
 
 docker-build:
-	@cd src/handlers/failover \
+	@cd src/handlers/$(DOCKER_PATH) \
 		&& docker build . -t ghe-auto-failover/failover \
 		&& docker run --rm -v `pwd`/vendored:/app/vendored ghe-auto-failover/failover
 
